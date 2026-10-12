@@ -10,6 +10,7 @@ wasm_simd = yes
 embedded_nnue = yes
 minify_js = yes
 assertion = no
+pthreads ?= no
 
 VPATH := $(VPATH):emscripten
 EM_CXXFLAGS +=
@@ -18,11 +19,16 @@ EM_LDFLAGS += \
 	-s MODULARIZE=1 -s EXPORT_NAME="Stockfish" -s ENVIRONMENT=web,worker,node \
 	-s STRICT=1 \
 	-s ASYNCIFY=1 -s 'ASYNCIFY_IMPORTS=["emscripten_utils_getline_impl"]' \
-	-s USE_PTHREADS=1 \
-	-s PROXY_TO_PTHREAD=1 \
 	-s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=$$((1 << 27)) -s MAXIMUM_MEMORY=$$((1 << 31)) \
 	-s FILESYSTEM=1 -s EXTRA_EXPORTED_RUNTIME_METHODS=["FS"] \
 	-s ALLOW_UNIMPLEMENTED_SYSCALLS
+
+ifeq ($(pthreads),yes)
+	EM_LDFLAGS += -s USE_PTHREADS=1 -s PROXY_TO_PTHREAD=1
+else
+	EM_CXXFLAGS += -DNO_THREADS
+	EM_LDFLAGS += -s USE_PTHREADS=0
+endif
 
 ifeq ($(minify_js),yes)
 	EM_LDFLAGS += --closure 1
@@ -72,7 +78,9 @@ endif
 
 emscripten_copy_files:
 	cp -f ../AUTHORS ../Copying.txt stockfish.js stockfish.wasm emscripten/public
+ifeq ($(pthreads),yes)
 	cat stockfish.worker.js emscripten/worker-postamble.js > emscripten/public/stockfish.worker.js
+endif
 
 emscripten_build: build emscripten_copy_files
 

@@ -1,15 +1,4 @@
 //
-// Post custom message to all workers (including main worker)
-//
-Module["postCustomMessage"] = (data) => {
-  // TODO: Acutally want to post only to main worker
-  for (let worker of PThread.runningWorkers) {
-    // prettier-ignore
-    worker.postMessage({ "cmd": "custom", "userData": data });
-  }
-};
-
-//
 // Simple queue with async get (assume single consumer)
 //
 class Queue {
@@ -33,10 +22,21 @@ class Queue {
   }
 }
 
-//
-// TODO: This is used only by main worker
-//
 Module["queue"] = new Queue();
+
+//
+// Post message: if multithreaded (PThread workers available), post to workers;
+// if single-threaded, put directly into Module["queue"].
+//
+Module["postCustomMessage"] = (data) => {
+  if (typeof PThread !== "undefined" && PThread.runningWorkers && PThread.runningWorkers.length > 0) {
+    for (let worker of PThread.runningWorkers) {
+      worker.postMessage({ "cmd": "custom", "userData": data });
+    }
+  } else {
+    Module["queue"].put(data);
+  }
+};
 
 Module["onCustomMessage"] = (data) => {
   Module["queue"].put(data);
@@ -73,5 +73,7 @@ Module["print"] = Module["printErr"] = (data) => {
 };
 
 Module["terminate"] = () => {
-  PThread.terminateAllThreads();
+  if (typeof PThread !== "undefined" && typeof PThread.terminateAllThreads === "function") {
+    PThread.terminateAllThreads();
+  }
 };

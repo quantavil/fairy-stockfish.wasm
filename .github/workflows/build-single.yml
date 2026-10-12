@@ -1,0 +1,68 @@
+name: Build Single-Threaded WASM
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - single-thread
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build Single-Threaded WASM with Emscripten
+        run: |
+          docker run --rm -v $(pwd):/app -w /app/src emscripten/emsdk:2.0.26 make -C .. emscripten_build ARCH=wasm pthreads=no wasm_simd=yes
+
+      - name: Verify build with Node.js
+        run: |
+          node -e "
+            const Stockfish = require('./src/emscripten/public/stockfish.js');
+            Stockfish().then(sf => {
+              sf.addMessageListener(msg => {
+                console.log('Engine output:', msg);
+                if (msg === 'uciok') {
+                  console.log('Single-threaded engine verification passed!');
+                  process.exit(0);
+                }
+              });
+              sf.postMessage('uci');
+            }).catch(err => {
+              console.error('Engine verification error:', err);
+              process.exit(1);
+            });
+          "
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p dist
+          cp src/emscripten/public/stockfish.js dist/fairy-stockfish.js
+          cp src/emscripten/public/stockfish.wasm dist/fairy-stockfish.wasm
+          cd dist
+          sha256sum fairy-stockfish.js fairy-stockfish.wasm > checksums.txt
+          cat checksums.txt
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fairy-stockfish-single
+          path: dist/
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/fairy-stockfish.js
+            dist/fairy-stockfish.wasm
+            dist/checksums.txt
+          generate_release_notes: true
