@@ -21,7 +21,7 @@ jobs:
 
       - name: Build Single-Threaded WASM with Emscripten
         run: |
-          docker run --rm -v $(pwd):/app -w /app/src emscripten/emsdk:2.0.26 make -C .. emscripten_build ARCH=wasm pthreads=no wasm_simd=yes
+          docker run --rm -v $(pwd):/app -w /app/src/emscripten emscripten/emsdk:2.0.26 make -C .. emscripten_build ARCH=wasm pthreads=no wasm_simd=yes
 
       - name: Verify build with Node.js
         run: |
