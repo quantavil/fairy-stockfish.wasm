@@ -11,6 +11,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -19,29 +20,77 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Build Single-Threaded WASM with Emscripten
         run: |
-          docker run --rm -v $(pwd):/app -w /app/src/emscripten emscripten/emsdk:2.0.26 make -C .. emscripten_build ARCH=wasm pthreads=no wasm_simd=yes
+          docker run --rm -v $(pwd):/app -w /app/src/emscripten emscripten/emsdk:2.0.26 bash -c "make -C .. clean && make -C .. emscripten_build ARCH=wasm pthreads=no wasm_simd=yes -j\$(nproc)"
 
-      - name: Verify build with Node.js
+      - name: Verify build with Bun (UCI, Variants, Classical Eval)
         run: |
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
+          bun -e "
             const Stockfish = require('./src/emscripten/public/stockfish.js');
-            const wasmPath = path.resolve('./src/emscripten/public/stockfish.wasm');
-            const wasmBinary = fs.readFileSync(wasmPath);
-            Stockfish({ wasmBinary }).then(sf => {
-              sf.addMessageListener(msg => {
-                console.log('Engine output:', msg);
-                if (msg === 'uciok') {
-                  console.log('Single-threaded engine verification passed!');
-                  process.exit(0);
-                }
+            async function test() {
+              const sf = await Stockfish();
+              console.log('Stockfish loaded successfully.');
+
+              // Test UCI
+              await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('UCI timeout')), 5000);
+                const listener = (msg) => {
+                  if (msg === 'uciok') {
+                    clearTimeout(timeout);
+                    sf.removeMessageListener(listener);
+                    console.log('[PASS] uciok received');
+                    resolve();
+                  }
+                };
+                sf.addMessageListener(listener);
+                sf.postMessage('uci');
               });
-              sf.postMessage('uci');
-            }).catch(err => {
-              console.error('Engine verification error:', err);
+
+              // Test King of the Hill variant
+              await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('Variant timeout')), 10000);
+                const listener = (msg) => {
+                  if (msg.startsWith('bestmove')) {
+                    clearTimeout(timeout);
+                    sf.removeMessageListener(listener);
+                    console.log('[PASS] kingofthehill search:', msg);
+                    resolve();
+                  }
+                };
+                sf.addMessageListener(listener);
+                sf.postMessage('setoption name UCI_Variant value kingofthehill');
+                sf.postMessage('position startpos');
+                sf.postMessage('go depth 6');
+              });
+
+              // Test Classical Eval
+              await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('Classical eval timeout')), 10000);
+                const listener = (msg) => {
+                  if (msg.startsWith('bestmove')) {
+                    clearTimeout(timeout);
+                    sf.removeMessageListener(listener);
+                    console.log('[PASS] classical eval search:', msg);
+                    resolve();
+                  }
+                };
+                sf.addMessageListener(listener);
+                sf.postMessage('setoption name Use NNUE value false');
+                sf.postMessage('position startpos');
+                sf.postMessage('go depth 8');
+              });
+
+              console.log('All single-threaded engine checks passed!');
+              process.exit(0);
+            }
+            test().catch(err => {
+              console.error(err);
               process.exit(1);
             });
           "

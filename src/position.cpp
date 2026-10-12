@@ -1549,9 +1549,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(is_ok(m));
   assert(&newSt != st);
 
-#ifndef NO_THREADS
-  thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
-#endif
+  if (thisThread)
+      thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
   Key k = st->key ^ Zobrist::side;
 
   // Copy some fields of the old state to our new StateInfo object except the
@@ -1667,9 +1666,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       // Update material hash key and prefetch access to materialTable
       k ^= Zobrist::psq[captured][capsq];
       st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
-#ifndef NO_THREADS
-      prefetch(thisThread->materialTable[material_key(var->endgameEval)]);
-#endif
+      if (thisThread)
+          prefetch(thisThread->materialTable[material_key(var->endgameEval)]);
       // Reset rule 50 counter
       st->rule50 = 0;
   }

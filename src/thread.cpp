@@ -38,7 +38,11 @@ ThreadPool Threads; // Global object
 
 Thread::Thread(size_t n) : idx(n), stdThread(&Thread::idle_loop, this) {
 
+#ifndef NO_THREADS
   wait_for_search_finished();
+#else
+  searching = false;
+#endif
 }
 
 
@@ -47,11 +51,13 @@ Thread::Thread(size_t n) : idx(n), stdThread(&Thread::idle_loop, this) {
 
 Thread::~Thread() {
 
+#ifndef NO_THREADS
   assert(!searching);
 
   exit = true;
   start_searching();
   stdThread.join();
+#endif
 }
 
 
@@ -80,9 +86,15 @@ void Thread::clear() {
 
 void Thread::start_searching() {
 
+#ifndef NO_THREADS
   std::lock_guard<std::mutex> lk(mutex);
   searching = true;
   cv.notify_one(); // Wake up the thread in idle_loop()
+#else
+  searching = true;
+  search();
+  searching = false;
+#endif
 }
 
 
@@ -91,8 +103,10 @@ void Thread::start_searching() {
 
 void Thread::wait_for_search_finished() {
 
+#ifndef NO_THREADS
   std::unique_lock<std::mutex> lk(mutex);
   cv.wait(lk, [&]{ return !searching; });
+#endif
 }
 
 
@@ -136,6 +150,10 @@ void Thread::idle_loop() {
 /// Upon resizing, threads are recreated to allow for binding if necessary.
 
 void ThreadPool::set(size_t requested) {
+
+#ifdef NO_THREADS
+  requested = std::min(requested, size_t(1));
+#endif
 
   if (size() > 0)   // destroy any existing thread(s)
   {
@@ -181,7 +199,9 @@ void ThreadPool::clear() {
 void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
                                 const Search::LimitsType& limits, bool ponderMode) {
 
+#ifndef NO_THREADS
   main()->wait_for_search_finished();
+#endif
 
   main()->stopOnPonderhit = stop = abort = false;
   increaseDepth = true;

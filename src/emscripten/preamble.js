@@ -1,4 +1,20 @@
 //
+// Auto-load wasm binary in Node.js / Bun environments if not already provided
+//
+if (typeof process !== "undefined" && process.versions && (process.versions.node || process.versions.bun) && typeof require === "function") {
+  if (typeof Module["wasmBinary"] === "undefined") {
+    try {
+      const _fs = require("fs");
+      const _path = require("path");
+      const _wasmFile = _path.resolve(__dirname, "stockfish.wasm");
+      if (_fs.existsSync(_wasmFile)) {
+        Module["wasmBinary"] = _fs.readFileSync(_wasmFile);
+      }
+    } catch (e) {}
+  }
+}
+
+//
 // Simple queue with async get (assume single consumer)
 //
 class Queue {

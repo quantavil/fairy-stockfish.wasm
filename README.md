@@ -1,17 +1,53 @@
-## fairy-stockfish-nnue.wasm
+## fairy-stockfish-nnue.wasm (Single-Thread & Multi-Thread)
 
-[![npm version](https://badge.fury.io/js/fairy-stockfish-nnue.wasm.svg)](https://badge.fury.io/js/fairy-stockfish-nnue.wasm)
-[![CI](https://github.com/ianfab/fairy-stockfish.wasm/actions/workflows/ci.yml/badge.svg)](https://github.com/ianfab/fairy-stockfish.wasm/actions/workflows/ci.yml)
+WebAssembly port of [Fairy-Stockfish](https://github.com/ianfab/Fairy-Stockfish) with NNUE and extensive chess variant support.
 
-WebAssembly port of [Fairy-Stockfish](https://github.com/ianfab/Fairy-Stockfish) with NNUE support, currently used by [pychess.org](https://www.pychess.org) for client-side analysis.
+### Single-Threaded Build (`single-thread` branch)
 
-See [fairy-stockfish-nnue-wasm-demo](https://github.com/ianfab/fairy-stockfish-nnue-wasm-demo) for a demo.
+The single-threaded build (`pthreads=no`) provides **universal browser compatibility**:
+- **No `SharedArrayBuffer` requirement**: Runs in standard web contexts and userscripts without requiring Cross-Origin Isolation (`Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers).
+- **Works on Chess.com, Lichess, and any web page**: Can be loaded directly in browsers, Web Workers, Node.js, and Bun.
+- **Full Variant & NNUE Support**: Supports King of the Hill, 3-Check, Atomic, Antichess, Crazyhouse, Horde, Racing Kings, and standard chess with embedded NNUE evaluation.
 
-For development, see [`src/emscripten/README.md`](src/emscripten/README.md).
+### Building Locally
 
-Current default branch is `nnue`.
+Using Podman or Docker:
 
-To release a new version:
-* Make sure CI passes (update reference bench if required)
-* Bump version number in `src/emscripten/public/package.json`
-* Create and push a tag with the name corresponding to the version number
+```bash
+# Single-threaded build (recommended for universal web & userscript use)
+podman run --rm -v $(pwd):/app -w /app/src/emscripten docker.io/emscripten/emsdk:2.0.26 \
+  make -C .. emscripten_build ARCH=wasm pthreads=no wasm_simd=yes -j$(nproc)
+
+# Multi-threaded build (requires SharedArrayBuffer & COOP/COEP)
+podman run --rm -v $(pwd):/app -w /app/src/emscripten docker.io/emscripten/emsdk:2.0.26 \
+  make -C .. emscripten_build ARCH=wasm pthreads=yes wasm_simd=yes -j$(nproc)
+```
+
+### Running with Bun or Node.js
+
+```bash
+# Interactive UCI shell
+bun src/emscripten/public/uci.js
+
+# Benchmark
+bun src/emscripten/public/uci.js "bench 16 1 13 default depth"
+```
+
+### Browser / Userscript Usage (via jsDelivr CDN)
+
+```javascript
+import Stockfish from 'https://cdn.jsdelivr.net/gh/quantavil/fairy-stockfish.wasm@v1.0.0-single/dist/fairy-stockfish.js';
+
+const sf = await Stockfish();
+sf.addMessageListener((line) => {
+  console.log(line);
+});
+
+sf.postMessage('uci');
+sf.postMessage('setoption name UCI_Variant value kingofthehill');
+sf.postMessage('position startpos');
+sf.postMessage('go depth 12');
+```
+
+For development details, see [`src/emscripten/README.md`](src/emscripten/README.md).
+

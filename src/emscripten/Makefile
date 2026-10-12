@@ -8,26 +8,27 @@ bits = 64
 # Build options
 wasm_simd = yes
 embedded_nnue = yes
-minify_js = yes
+minify_js = no
 assertion = no
 pthreads ?= no
 
 VPATH := $(VPATH):emscripten
-EM_CXXFLAGS +=
-EM_LDFLAGS += \
+EM_CXXFLAGS += -fno-lto
+EM_LDFLAGS += -fno-lto \
 	--pre-js emscripten/preamble.js \
 	-s MODULARIZE=1 -s EXPORT_NAME="Stockfish" -s ENVIRONMENT=web,worker,node \
 	-s STRICT=1 \
 	-s ASYNCIFY=1 -s 'ASYNCIFY_IMPORTS=["emscripten_utils_getline_impl"]' \
 	-s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=$$((1 << 27)) -s MAXIMUM_MEMORY=$$((1 << 31)) \
+	-s TOTAL_STACK=16777216 -s ASYNCIFY_STACK_SIZE=65536 \
 	-s FILESYSTEM=1 -s EXTRA_EXPORTED_RUNTIME_METHODS=["FS"] \
 	-s ALLOW_UNIMPLEMENTED_SYSCALLS
 
 ifeq ($(pthreads),yes)
 	EM_LDFLAGS += -s USE_PTHREADS=1 -s PROXY_TO_PTHREAD=1
 else
-	EM_CXXFLAGS += -DNO_THREADS
-	EM_LDFLAGS += -s USE_PTHREADS=0
+	EM_CXXFLAGS += -UUSE_PTHREADS -DNO_THREADS
+	EM_LDFLAGS += -s USE_PTHREADS=0 -s NO_EXIT_RUNTIME=1
 endif
 
 ifeq ($(minify_js),yes)
@@ -76,7 +77,7 @@ emscripten/embedded_nnue.cpp: net
 	node emscripten/misc/embedded_nnue.js < $(nnuenet) > emscripten/embedded_nnue.cpp
 endif
 
-emscripten_copy_files:
+emscripten_copy_files: build
 	cp -f ../AUTHORS ../Copying.txt stockfish.js stockfish.wasm emscripten/public
 ifeq ($(pthreads),yes)
 	cat stockfish.worker.js emscripten/worker-postamble.js > emscripten/public/stockfish.worker.js

@@ -27,7 +27,7 @@
 /// The implementation calls pthread_create() with the stack size parameter
 /// equal to the linux 8MB default, on platforms that support it.
 
-#if defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__) || defined(USE_PTHREADS)
+#if (defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__) || defined(USE_PTHREADS)) && !defined(NO_THREADS)
 
 #include <pthread.h>
 
@@ -66,7 +66,17 @@ public:
 
 namespace Stockfish {
 
+#if defined(NO_THREADS)
+class NativeThread {
+public:
+  template<class T, class P = std::pair<T*, void(T::*)()>>
+  explicit NativeThread(void(T::*)(), T*) {}
+  void join() {}
+  void detach() {}
+};
+#else
 typedef std::thread NativeThread;
+#endif
 
 } // namespace Stockfish
 
