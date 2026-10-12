@@ -26,8 +26,12 @@ jobs:
       - name: Verify build with Node.js
         run: |
           node -e "
+            const fs = require('fs');
+            const path = require('path');
             const Stockfish = require('./src/emscripten/public/stockfish.js');
-            Stockfish().then(sf => {
+            const wasmPath = path.resolve('./src/emscripten/public/stockfish.wasm');
+            const wasmBinary = fs.readFileSync(wasmPath);
+            Stockfish({ wasmBinary }).then(sf => {
               sf.addMessageListener(msg => {
                 console.log('Engine output:', msg);
                 if (msg === 'uciok') {
